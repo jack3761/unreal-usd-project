@@ -46,7 +46,7 @@ public class USDCameraFrameRanges : ModuleRules
 				"USDStage",
 				"UnrealUSDWrapper",
 				"USDUtilities",
-				"CinematicCamera", "AITestSuite"
+				"CinematicCamera"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

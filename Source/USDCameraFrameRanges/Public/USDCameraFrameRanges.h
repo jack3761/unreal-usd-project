@@ -6,6 +6,14 @@
 #include "Modules/ModuleManager.h"
 
 
+class ACineCameraActor;
+
+namespace UE
+{
+	class FSdfPath;
+	class FUsdPrim;
+}
+
 class FToolBarBuilder;
 class FMenuBuilder;
 class AUsdStageActor;
@@ -34,6 +42,10 @@ private:
 
 	// TArray<FCameraInfo> GetCamerasFromUSDStage(TObjectPtr<AUsdStageActor> USDStageActor);
 	TArray<FCameraInfo> GetCamerasFromUSDStage();
+	
+	void TraverseAndCollectCameras(UE::FUsdPrim& CurrentPrim, TArray<UE::FSdfPath>& OutCameraPaths);
+	// void FUSDCameraFrameRangesModule::TraverseAndCollectCameras(const UE::FUsdPrim& CurrentPrim,
+	// TArray<UE::FSdfPath>& OutCameraPaths, TArray<AActor*>& CineCameraActors, TArray<ACineCameraActor*>& OutCameraActors);
 	
 	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
 
