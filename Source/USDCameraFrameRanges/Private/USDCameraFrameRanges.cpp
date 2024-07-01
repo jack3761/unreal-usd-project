@@ -21,7 +21,8 @@
 #include "UsdWrappers/UsdAttribute.h"
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/attribute.h"
-// #include "pxr/base/gf/vec3d.h" 
+#include "pxr/usd/usdGeom/xform.h"
+#include "pxr/base/gf/vec3d.h"
 #include "USDIncludesEnd.h"
 #include "Experimental/Async/AwaitableTask.h"
 
@@ -185,7 +186,7 @@ FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStag
 		pxr::VtValue& PxrValue = Value.GetUsdValue();
 		if (PxrValue.IsHolding<pxr::GfVec3d>())
 		{
-			auto Translation = PxrValue.Get<pxr::GfVec3d>();
+			pxr::GfVec3d Translation = PxrValue.Get<pxr::GfVec3d>();
 		
 			// Convert pxr::GfVec3d to FVector
 			FVector CameraLocation(Translation[0], Translation[1], Translation[2]);
