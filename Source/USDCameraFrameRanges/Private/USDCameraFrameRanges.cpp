@@ -19,8 +19,12 @@
 #include "UsdWrappers/UsdStage.h"
 #include "UsdWrappers/UsdPrim.h"
 #include "UsdWrappers/UsdAttribute.h"
+#include "pxr/pxr.h"
+#include "pxr/usd/usd/attribute.h"
+// #include "pxr/base/gf/vec3d.h" 
 #include "USDIncludesEnd.h"
 #include "Experimental/Async/AwaitableTask.h"
+
 
 
 static const FName USDCameraFrameRangesTabName("USDCameraFrameRanges");
@@ -68,15 +72,11 @@ void FUSDCameraFrameRangesModule::ShutdownModule()
 
 TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnTabArgs& SpawnTabArgs)
 {
-	// Dummy data for demonstration
-	TArray<FCameraInfo> Cameras = GetCamerasFromUSDStage();
-	
-	
-	// Cameras.Add({ "Camera1", 1, 100});
-	// Cameras.Add({ "Camera2", 50, 200});
-	// // Add more cameras as needed
 
-	// Create a vertical box to hold all camera rows
+	TObjectPtr<AUsdStageActor> StageActor = GetUsdStageActor();
+	
+	TArray<FCameraInfo> Cameras = GetCamerasFromUSDStage(StageActor);	
+	
 	TSharedPtr<SVerticalBox> CameraList = SNew(SVerticalBox);
 
 	CameraList->AddSlot()
@@ -130,14 +130,14 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 				[
 					SNew(SButton)
 					.Text(FText::FromString(TEXT("Preview")))
-					// Add functionality 
+					// Add functionality
 				]
 				+ SHorizontalBox::Slot()
 				.AutoWidth()
 				[
 					SNew(SButton)
 					.Text(FText::FromString(TEXT("Duplicate")))
-					// Add functionality 
+					.OnClicked(FOnClicked::CreateRaw(this, &FUSDCameraFrameRangesModule::OnDuplicateButtonClicked, StageActor, Camera))
 				]
 			];
 		}
@@ -161,6 +161,53 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 				]
 			]
 		];
+}
+
+FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera)
+{
+	UE_LOG(LogTemp, Log, TEXT("Duplicate button clicked for camera: %s"), *Camera.CameraName);
+	
+	TObjectPtr<ACineCameraActor> NewCameraActor = GEditor->GetEditorWorldContext().World()->SpawnActor<ACineCameraActor>();
+	if (!NewCameraActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to spawn new CineCameraActor"));
+		return FReply::Handled();
+	}
+	FString NewLabel = Camera.CameraName + TEXT("_duplicate");
+	NewCameraActor->SetActorLabel(NewLabel);
+	
+	UE::FUsdPrim CurrentPrim = StageActor->GetUsdStage().GetPrimAtPath(*Camera.PrimPath);
+	
+	UE::FVtValue Value;
+	bool bSuccess = Camera.Translation.Get(Value, 0.0);
+	if (bSuccess)
+	{
+		pxr::VtValue& PxrValue = Value.GetUsdValue();
+		if (PxrValue.IsHolding<pxr::GfVec3d>())
+		{
+			auto Translation = PxrValue.Get<pxr::GfVec3d>();
+		
+			// Convert pxr::GfVec3d to FVector
+			FVector CameraLocation(Translation[0], Translation[1], Translation[2]);
+		
+			// Set the camera location in Unreal Engine
+			NewCameraActor->SetActorLocation(CameraLocation);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("The translation attribute value is not of type GfVec3d"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to get the translation attribute at time 0"));
+	}
+
+	// C:\Program Files\Epic Games\UE_5.4\Engine\Plugins\Importers\USDImporter\Source\ThirdParty\USD\include\pxr\base\gf\vec3d.h
+	
+
+	
+	return FReply::Handled();
 }
 
 
@@ -194,15 +241,12 @@ void FUSDCameraFrameRangesModule::RegisterMenus()
 	}
 }
 
-TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage()
+TObjectPtr<AUsdStageActor> FUSDCameraFrameRangesModule::GetUsdStageActor()
 {
-	TArray<UE::FSdfPath> CameraPaths;
-	TArray<FCameraInfo> Cameras;
-	
 	if (!GEditor)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("GEditor is not available"));
-		return Cameras;
+		return nullptr;
 	}
 	
 	UWorld* World = GEditor->GetEditorWorldContext().World();
@@ -212,33 +256,30 @@ TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage()
 	TArray<AActor*> StageActors;
 	UGameplayStatics::GetAllActorsOfClass(World, AUsdStageActor::StaticClass(), StageActors);
 
-	// will only work with one UsdStageActor, which is the aim for this project
-	AUsdStageActor* StageActor = Cast<AUsdStageActor>(StageActors[0]);
-
-	
-
-	// AUsdStageActor* StageActor = FindActor<AUsdStageActor>(World);
+	// Will only work with one UsdStageActor, which is the aim for this project
+	TObjectPtr<AUsdStageActor> StageActor = Cast<AUsdStageActor>(StageActors[0]);	
 
 	if (!StageActor)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("USDStageActor pointer is null"));
-		return Cameras;
+		return nullptr;
 	}
 	else
 	{
 		UE_LOG(LogTemp, Log, TEXT("USDStageActor assigned"));
 	}
 
-	UE::FUsdStage StageBase = StageActor->GetUsdStage();
+	return StageActor;
+}
+
+TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage(TObjectPtr<AUsdStageActor> StageActor)
+{
+	TArray<UE::FSdfPath> CameraPaths;
+	TArray<FCameraInfo> Cameras;
 	
+	UE::FUsdStage StageBase = StageActor->GetUsdStage();	
 	UE::FUsdPrim root = StageBase.GetPseudoRoot();
 
-	TArray<AActor*> CineCameraActors;
-	UGameplayStatics::GetAllActorsOfClass(World, ACineCameraActor::StaticClass(), CineCameraActors);
-
-	TArray<ACineCameraActor*> OutCameraActors;
-
-	// TraverseAndCollectCameras(root, CameraPaths, CineCameraActors, OutCameraActors);
 	TraverseAndCollectCameras(root, CameraPaths);
 
 	for (UE::FSdfPath path : CameraPaths)
@@ -247,24 +288,37 @@ TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage()
 		FCameraInfo CameraInfo;
 		CameraInfo.CameraName = CurrentPrim.GetName().ToString();
 		
-		UE::FUsdAttribute AttrRotate = CurrentPrim.GetAttribute(TEXT("xformOp:rotateXYZ"));
-		UE::FUsdAttribute AttrTranslate = CurrentPrim.GetAttribute(TEXT("xformOp:translate"));
+		// UE::FUsdAttribute AttrRotate = CurrentPrim.GetAttribute(TEXT("xformOp:rotateXYZ"));
+		// UE::FUsdAttribute AttrTranslate = CurrentPrim.GetAttribute(TEXT("xformOp:translate"));
+		
+		CameraInfo.Translation = CurrentPrim.GetAttribute(TEXT("xformOp:translate"));
+		CameraInfo.Rotation = CurrentPrim.GetAttribute(TEXT("xformOp:rotateXYZ"));
 
-		TArray<double> RotTimeSamples;
-		AttrRotate.GetTimeSamples(RotTimeSamples);
+		// TArray<double> RotTimeSamples;
+		// AttrRotate.GetTimeSamples(RotTimeSamples);
+		//
+		// TArray<double> TransTimeSamples;
+		// AttrRotate.GetTimeSamples(TransTimeSamples);
 
-		TArray<double> TransTimeSamples;
-		AttrRotate.GetTimeSamples(TransTimeSamples);
-
-		if (RotTimeSamples.Num() > TransTimeSamples.Num())
+		CameraInfo.Rotation.GetTimeSamples(CameraInfo.RotTimeSamples);
+		CameraInfo.Translation.GetTimeSamples(CameraInfo.TransTimeSamples);
+		
+		if (CameraInfo.RotTimeSamples.Num() > 0 && CameraInfo.TransTimeSamples.Num() > 0)
 		{
-			CameraInfo.StartFrame = RotTimeSamples[0];
-			CameraInfo.EndFrame = RotTimeSamples[RotTimeSamples.Num()-1];
+			if (CameraInfo.RotTimeSamples.Num() > CameraInfo.TransTimeSamples.Num())
+			{
+				CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
+				CameraInfo.EndFrame = CameraInfo.RotTimeSamples[CameraInfo.RotTimeSamples.Num()-1];
+			}
+			else
+			{
+				CameraInfo.StartFrame = CameraInfo.TransTimeSamples[0];
+				CameraInfo.EndFrame = CameraInfo.TransTimeSamples[CameraInfo.TransTimeSamples.Num()-1];
+			}
 		}
 		else
 		{
-			CameraInfo.StartFrame = TransTimeSamples[0];
-			CameraInfo.EndFrame = TransTimeSamples[TransTimeSamples.Num()-1];
+			UE_LOG(LogTemp, Warning, TEXT("Camera %s has no rotation or translation time samples"), *CameraInfo.CameraName);
 		}
 		
 		Cameras.Add(CameraInfo);
@@ -290,32 +344,6 @@ void FUSDCameraFrameRangesModule::TraverseAndCollectCameras(UE::FUsdPrim& Curren
 		TraverseAndCollectCameras(Child, OutCameraPaths);
 	}
 }
-// void FUSDCameraFrameRangesModule::TraverseAndCollectCameras(const UE::FUsdPrim& CurrentPrim,
-// 	TArray<UE::FSdfPath>& OutCameraPaths, TArray<AActor*>& CineCameraActors, TArray<ACineCameraActor*>& OutCameraActors)
-// {
-//
-// 	if (CurrentPrim.IsA(FName(TEXT("Camera"))))
-// 	{
-// 		FString CameraName = CurrentPrim.GetName().ToString();
-// 		for (TObjectPtr<AActor> Camera : CineCameraActors)
-// 		{
-// 			if (Camera->GetActorLabel().Equals(CameraName))
-// 			{
-// 				OutCameraActors.Add(Cast<ACineCameraActor>(Camera));
-// 				
-// 				UE::FSdfPath path = CurrentPrim.GetPrimPath();				
-// 				OutCameraPaths.Add(path);
-// 		        UE_LOG(LogTemp, Log, TEXT("Camera found at path: %s"), *path.GetString());
-// 			}
-// 		}
-// 	}
-//
-// 	for (UE::FUsdPrim& Child : CurrentPrim.GetChildren())
-// 	{
-// 		UE_LOG(LogTemp, Log, TEXT("Traversing from %s, type: %s"), *Child.GetName().ToString(), *Child.GetTypeName().ToString());
-// 		TraverseAndCollectCameras(Child, OutCameraPaths, CineCameraActors, OutCameraActors);
-// 	}
-// }
 
 #undef LOCTEXT_NAMESPACE
 	
