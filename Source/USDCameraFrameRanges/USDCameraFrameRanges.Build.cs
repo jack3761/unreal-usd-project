@@ -47,6 +47,7 @@ public class USDCameraFrameRanges : ModuleRules
 				"UnrealUSDWrapper",
 				"USDUtilities",
 				"CinematicCamera",
+				"Boost",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

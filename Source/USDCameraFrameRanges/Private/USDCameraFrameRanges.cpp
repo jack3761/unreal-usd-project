@@ -169,30 +169,44 @@ FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStag
 	UE_LOG(LogTemp, Log, TEXT("Duplicate button clicked for camera: %s"), *Camera.CameraName);
 	
 	TObjectPtr<ACineCameraActor> NewCameraActor = GEditor->GetEditorWorldContext().World()->SpawnActor<ACineCameraActor>();
+	
 	if (!NewCameraActor)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to spawn new CineCameraActor"));
 		return FReply::Handled();
 	}
+	
 	FString NewLabel = Camera.CameraName + TEXT("_duplicate");
 	NewCameraActor->SetActorLabel(NewLabel);
-	
-	UE::FUsdPrim CurrentPrim = StageActor->GetUsdStage().GetPrimAtPath(*Camera.PrimPath);
+
+	UE_LOG(LogTemp, Log, TEXT("New camera created with label: %s"), *NewCameraActor->GetActorLabel());
+	UE_LOG(LogTemp, Log, TEXT("Camera name: %s"), *NewCameraActor->GetName());
 	
 	UE::FVtValue Value;
+	
+	UE_LOG(LogTemp, Log, TEXT("Getting value"));
+
 	bool bSuccess = Camera.Translation.Get(Value, 0.0);
+
+	UE_LOG(LogTemp, Log, TEXT("Value received"));
+
 	if (bSuccess)
 	{
+		UE_LOG(LogTemp, Log, TEXT("Translation value found"));
+
 		pxr::VtValue& PxrValue = Value.GetUsdValue();
 		if (PxrValue.IsHolding<pxr::GfVec3d>())
 		{
 			pxr::GfVec3d Translation = PxrValue.Get<pxr::GfVec3d>();
 		
 			// Convert pxr::GfVec3d to FVector
-			FVector CameraLocation(Translation[0], Translation[1], Translation[2]);
+			FVector CameraLocation(Translation[0], Translation[2], Translation[1]);
 		
 			// Set the camera location in Unreal Engine
 			NewCameraActor->SetActorLocation(CameraLocation);
+
+			UE_LOG(LogTemp, Log, TEXT("Camera actor location set to %f %f %f"), Translation[0], Translation[1], Translation[2]);
+
 		}
 		else
 		{
@@ -202,6 +216,36 @@ FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStag
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to get the translation attribute at time 0"));
+	}
+
+	bSuccess = Camera.Rotation.Get(Value, 0.0);
+
+	if (bSuccess)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Rotation value found"));
+
+		pxr::VtValue& PxrValue = Value.GetUsdValue();
+		if (PxrValue.IsHolding<pxr::GfVec3f>())
+		{
+			pxr::GfVec3f Rotation = PxrValue.Get<pxr::GfVec3f>();
+		
+			// Convert pxr::GfVec3d to FVector
+			FRotator CameraRotation(Rotation[0], (Rotation[1]*-1)-90, Rotation[2]);
+		
+			// Set the camera location in Unreal Engine
+			NewCameraActor->SetActorRotation(CameraRotation);
+
+			UE_LOG(LogTemp, Log, TEXT("Camera actor rotation set to %f %f %f"), Rotation[0], Rotation[1], Rotation[2]);
+
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("The Rotation attribute value is not of type GfVec3d"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to get the Rotation attribute at time 0"));
 	}
 
 	// C:\Program Files\Epic Games\UE_5.4\Engine\Plugins\Importers\USDImporter\Source\ThirdParty\USD\include\pxr\base\gf\vec3d.h
@@ -304,22 +348,33 @@ TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage(TObjectP
 		CameraInfo.Rotation.GetTimeSamples(CameraInfo.RotTimeSamples);
 		CameraInfo.Translation.GetTimeSamples(CameraInfo.TransTimeSamples);
 		
-		if (CameraInfo.RotTimeSamples.Num() > 0 && CameraInfo.TransTimeSamples.Num() > 0)
+		if (CameraInfo.RotTimeSamples.Num() > 1 || CameraInfo.TransTimeSamples.Num() > 1)
 		{
 			if (CameraInfo.RotTimeSamples.Num() > CameraInfo.TransTimeSamples.Num())
 			{
-				CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
+				if (CameraInfo.RotTimeSamples[1] == 2.0)
+					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
+				else
+				{
+					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[1];
+				}
 				CameraInfo.EndFrame = CameraInfo.RotTimeSamples[CameraInfo.RotTimeSamples.Num()-1];
 			}
 			else
 			{
-				CameraInfo.StartFrame = CameraInfo.TransTimeSamples[0];
+				if (CameraInfo.RotTimeSamples[1] == 2.0)
+					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
+				else
+				{
+					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[1];
+				}
 				CameraInfo.EndFrame = CameraInfo.TransTimeSamples[CameraInfo.TransTimeSamples.Num()-1];
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Camera %s has no rotation or translation time samples"), *CameraInfo.CameraName);
+			CameraInfo.StartFrame = 1;
+			CameraInfo.EndFrame = 1;
 		}
 		
 		Cameras.Add(CameraInfo);
