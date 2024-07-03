@@ -21,6 +21,8 @@
 #include "UsdWrappers/UsdAttribute.h"
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/attribute.h"
+#include "pxr/base/vt/value.h"
+
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/base/gf/vec3d.h"
 #include "USDIncludesEnd.h"
@@ -71,6 +73,7 @@ void FUSDCameraFrameRangesModule::ShutdownModule()
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(USDCameraFrameRangesTabName);
 }
 
+// TODO add protection if there isn't USD or cameras
 TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnTabArgs& SpawnTabArgs)
 {
 
@@ -79,7 +82,7 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 	TArray<FCameraInfo> Cameras = GetCamerasFromUSDStage(StageActor);	
 	
 	TSharedPtr<SVerticalBox> CameraList = SNew(SVerticalBox);
-
+	
 	CameraList->AddSlot()
 	.Padding((2))
 	[
@@ -103,7 +106,7 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 			.Text(FText::FromString(TEXT("Create CineCameraActor")))
 		]
 	];
-
+	
 	if (Cameras.Num()>0)
 	{
 		// Loop through Cameras array and create a row widget for each camera
@@ -124,7 +127,7 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 				[
 					SNew(STextBlock)
 					.Text(FText::FromString(FString::Printf(TEXT("%d - %d"), Camera.StartFrame, Camera.EndFrame)))
-
+	
 				]
 				+ SHorizontalBox::Slot()
 				.AutoWidth()
@@ -143,7 +146,7 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 			];
 		}
 	}
-
+	
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
 		[
@@ -164,11 +167,14 @@ TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnT
 		];
 }
 
+// TODO add functionality to find the aperture stuff, and add duplicate animation
 FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera)
 {
 	UE_LOG(LogTemp, Log, TEXT("Duplicate button clicked for camera: %s"), *Camera.CameraName);
+
+	UWorld* World =  GEditor->GetEditorWorldContext().World();
 	
-	TObjectPtr<ACineCameraActor> NewCameraActor = GEditor->GetEditorWorldContext().World()->SpawnActor<ACineCameraActor>();
+	TObjectPtr<ACineCameraActor> NewCameraActor = World->SpawnActor<ACineCameraActor>();
 	
 	if (!NewCameraActor)
 	{
@@ -235,7 +241,7 @@ FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStag
 			// Set the camera location in Unreal Engine
 			NewCameraActor->SetActorRotation(CameraRotation);
 
-			UE_LOG(LogTemp, Log, TEXT("Camera actor rotation set to %f %f %f"), Rotation[0], Rotation[1], Rotation[2]);
+			UE_LOG(LogTemp, Log, TEXT("Camera actor rotation set to %f %f %f"), Rotation[0], (Rotation[1]*-1)-90, Rotation[2]);
 
 		}
 		else
@@ -248,10 +254,6 @@ FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStag
 		UE_LOG(LogTemp, Warning, TEXT("Failed to get the Rotation attribute at time 0"));
 	}
 
-	// C:\Program Files\Epic Games\UE_5.4\Engine\Plugins\Importers\USDImporter\Source\ThirdParty\USD\include\pxr\base\gf\vec3d.h
-	
-
-	
 	return FReply::Handled();
 }
 
@@ -317,6 +319,7 @@ TObjectPtr<AUsdStageActor> FUSDCameraFrameRangesModule::GetUsdStageActor()
 	return StageActor;
 }
 
+// TODO add protection against array length stuff
 TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage(TObjectPtr<AUsdStageActor> StageActor)
 {
 	TArray<UE::FSdfPath> CameraPaths;
