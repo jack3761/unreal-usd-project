@@ -19,5 +19,6 @@
 			"Type": "Editor",
 			"LoadingPhase": "Default"
 		}
-	]
+	],
+	"EnabledByDefault": true
 }

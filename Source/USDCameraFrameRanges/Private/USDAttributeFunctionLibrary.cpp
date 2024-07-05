@@ -13,11 +13,6 @@
 #include "pxr/base/vt/value.h"
 #include "USDIncludesEnd.h"
 
-#include <boost/intrusive_ptr.hpp>
-
-
-
-
 
 float UUSDAttributeFunctionLibrary::GetUsdFloatAttribute(AUsdStageActor* StageActor, FString PrimName, FString AttrName)
 {
@@ -48,6 +43,11 @@ float UUSDAttributeFunctionLibrary::GetUsdFloatAttribute(AUsdStageActor* StageAc
 	}
 
 	return 0.0;
+}
+
+FString UUSDAttributeFunctionLibrary::GetPointlessMessage()
+{
+	return FString(TEXT("This is a pointless message"));
 }
 
 void UUSDAttributeFunctionLibrary::GetSdfPathWithName(UE::FUsdPrim& CurrentPrim, FString TargetName, UE::FSdfPath& OutPath)

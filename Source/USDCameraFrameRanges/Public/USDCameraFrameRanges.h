@@ -33,6 +33,15 @@ struct FCameraInfo
 	int32 EndFrame;
 };
 
+struct FMaterialInfo
+{
+	FString ObjName;
+	FString MatName;
+	bool bMatchFound=false;
+	UE::FSdfPath PrimPath;
+		
+};
+
 class FUSDCameraFrameRangesModule : public IModuleInterface
 {
 public:
@@ -55,9 +64,11 @@ private:
 	void TraverseAndCollectCameras(UE::FUsdPrim& CurrentPrim, TArray<UE::FSdfPath>& OutCameraPaths);
 	// void FUSDCameraFrameRangesModule::TraverseAndCollectCameras(const UE::FUsdPrim& CurrentPrim,
 	// TArray<UE::FSdfPath>& OutCameraPaths, TArray<AActor*>& CineCameraActors, TArray<ACineCameraActor*>& OutCameraActors);
-	
+	void TraverseAndCollectMaterials(TObjectPtr<AUsdStageActor> StageActor, UE::FUsdPrim& CurrentPrim, TArray<FMaterialInfo>& MaterialNames);
+
 	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
 	FReply OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera);
+	FReply OnMaterialSwapButtonClicked(TObjectPtr<AUsdStageActor> StageActor);
 
 private:
 	TSharedPtr<class FUICommandList> PluginCommands;

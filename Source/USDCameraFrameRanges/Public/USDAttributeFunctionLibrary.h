@@ -20,15 +20,17 @@ class AUsdStageActor;
 UCLASS()
 class USDCAMERAFRAMERANGES_API UUSDAttributeFunctionLibrary : public UBlueprintFunctionLibrary
 {
-
+	GENERATED_BODY()
+	
 public:
-	UFUNCTION(BluePrintCallable, Category = "USD")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UsdAttributes")
 	static float GetUsdFloatAttribute(AUsdStageActor* StageActor, FString PrimName, FString AttrName);
+
+	UFUNCTION(BlueprintCallable)
+	static FString GetPointlessMessage();
 
 private:
 	static void GetSdfPathWithName(UE::FUsdPrim& CurrentPrim, FString TargetName, UE::FSdfPath& OutPath);
 
-
 	
-	GENERATED_BODY()
 };

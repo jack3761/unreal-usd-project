@@ -19,12 +19,15 @@
 #include "UsdWrappers/UsdStage.h"
 #include "UsdWrappers/UsdPrim.h"
 #include "UsdWrappers/UsdAttribute.h"
+#include "UsdWrappers/UsdRelationship.h"
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/base/vt/value.h"
 
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/base/gf/vec3d.h"
+#include "pxr/usd/usdShade/material.h"
+#include "pxr/usd/usdShade/shader.h"
 #include "USDIncludesEnd.h"
 #include "Experimental/Async/AwaitableTask.h"
 
@@ -76,96 +79,137 @@ void FUSDCameraFrameRangesModule::ShutdownModule()
 // TODO add protection if there isn't USD or cameras
 TSharedRef<SDockTab> FUSDCameraFrameRangesModule::OnSpawnPluginTab(const FSpawnTabArgs& SpawnTabArgs)
 {
+    TObjectPtr<AUsdStageActor> StageActor = GetUsdStageActor();
 
-	TObjectPtr<AUsdStageActor> StageActor = GetUsdStageActor();
-	
-	TArray<FCameraInfo> Cameras = GetCamerasFromUSDStage(StageActor);	
-	
-	TSharedPtr<SVerticalBox> CameraList = SNew(SVerticalBox);
-	
-	CameraList->AddSlot()
-	.Padding((2))
-	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.FillWidth((0.4))
-		[
-			SNew(STextBlock)
-			.Text(FText::FromString(TEXT("Camera name")))
-		]
-		+ SHorizontalBox::Slot()
-		.FillWidth(0.4)
-		[
-			SNew(STextBlock)
-			.Text(FText::FromString("Frame range"))
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		[
-			SNew(STextBlock)
-			.Text(FText::FromString(TEXT("Create CineCameraActor")))
-		]
-	];
-	
-	if (Cameras.Num()>0)
-	{
-		// Loop through Cameras array and create a row widget for each camera
-		for (const FCameraInfo& Camera : Cameras)
-		{
-			CameraList->AddSlot()
-			.Padding(2)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.FillWidth(0.4)
-				[
-					SNew(STextBlock)
-					.Text(FText::FromString(Camera.CameraName))
-				]
-				+ SHorizontalBox::Slot()
-				.FillWidth(0.4)
-				[
-					SNew(STextBlock)
-					.Text(FText::FromString(FString::Printf(TEXT("%d - %d"), Camera.StartFrame, Camera.EndFrame)))
-	
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					SNew(SButton)
-					.Text(FText::FromString(TEXT("Preview")))
-					// Add functionality
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					SNew(SButton)
-					.Text(FText::FromString(TEXT("Duplicate")))
-					.OnClicked(FOnClicked::CreateRaw(this, &FUSDCameraFrameRangesModule::OnDuplicateButtonClicked, StageActor, Camera))
-				]
-			];
-		}
-	}
-	
+    if (!StageActor)
+    {
+        // Handle case when StageActor is not found
+        return SNew(SDockTab)
+            .TabRole(ETabRole::NomadTab)
+            [
+                SNew(SBox)
+                .Padding(20)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(TEXT("USD Stage Actor not found. Please ensure a USD Stage Actor is present in the scene.")))
+                ]
+            ];
+    }
+
+    TArray<FCameraInfo> Cameras = GetCamerasFromUSDStage(StageActor);
+
+    if (Cameras.Num() == 0)
+    {
+        // Handle case when no cameras are found
+        return SNew(SDockTab)
+            .TabRole(ETabRole::NomadTab)
+            [
+                SNew(SBox)
+                .Padding(20)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(TEXT("No cameras found in the USD Stage. Please ensure there are cameras in the USD Stage.")))
+                ]
+            ];
+    }
+
+    TSharedPtr<SVerticalBox> CameraList = SNew(SVerticalBox);
+
+    CameraList->AddSlot()
+    .Padding(2)
+    [
+        SNew(SHorizontalBox)
+        + SHorizontalBox::Slot()
+        .FillWidth(0.4)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Camera name")))
+        ]
+        + SHorizontalBox::Slot()
+        .FillWidth(0.4)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString("Frame range"))
+        ]
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Create CineCameraActor")))
+        ]
+    ];
+
+    // Loop through Cameras array and create a row widget for each camera
+    for (const FCameraInfo& Camera : Cameras)
+    {
+        CameraList->AddSlot()
+        .Padding(2)
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.4)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(Camera.CameraName))
+            ]
+            + SHorizontalBox::Slot()
+            .FillWidth(0.4)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(FString::Printf(TEXT("%d - %d"), Camera.StartFrame, Camera.EndFrame)))
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            [
+                SNew(SButton)
+                .Text(FText::FromString(TEXT("Preview")))
+                // Add functionality for the Preview button
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            [
+                SNew(SButton)
+                .Text(FText::FromString(TEXT("Duplicate")))
+                .OnClicked(FOnClicked::CreateRaw(this, &FUSDCameraFrameRangesModule::OnDuplicateButtonClicked, StageActor, Camera))
+            ]
+        ];
+    }
+
 	return SNew(SDockTab)
-		.TabRole(ETabRole::NomadTab)
+	.TabRole(ETabRole::NomadTab)
+	[
+		// Main content of the tab
+		SNew(SVerticalBox) // Use SVerticalBox to hold everything vertically
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(20)
 		[
-			// Main content of the tab
-			SNew(SBox)
-			.Padding(20)
+			SNew(SScrollBox)
+			+ SScrollBox::Slot()
 			[
-				SNew(SScrollBox)
-				+ SScrollBox::Slot()
+				SNew(SBorder)
+				.Padding(FMargin(20))
 				[
-					SNew(SBorder)
-					.Padding(FMargin(20))
-					[
-						CameraList.ToSharedRef()
-					]
+					CameraList.ToSharedRef()
 				]
 			]
-		];
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(20)
+		[
+			// Temporary button to test functionality
+			SNew(SButton)
+			.Text(FText::FromString(TEXT("Material swap")))
+			.OnClicked(FOnClicked::CreateRaw(this, &FUSDCameraFrameRangesModule::OnMaterialSwapButtonClicked, StageActor))
+			
+		]
+	];
+
 }
+
+
+
 
 // TODO add functionality to find the aperture stuff, and add duplicate animation
 FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera)
@@ -257,6 +301,18 @@ FReply FUSDCameraFrameRangesModule::OnDuplicateButtonClicked(TObjectPtr<AUsdStag
 	return FReply::Handled();
 }
 
+FReply FUSDCameraFrameRangesModule::OnMaterialSwapButtonClicked(TObjectPtr<AUsdStageActor> StageActor)
+{
+	UE::FUsdStage Stage = StageActor->GetUsdStage();
+	UE::FUsdPrim root = Stage.GetPseudoRoot();
+	TArray<FMaterialInfo> MaterialNames;
+	
+	TraverseAndCollectMaterials(StageActor, root, MaterialNames);
+	return FReply::Handled();
+}
+
+
+
 
 void FUSDCameraFrameRangesModule::PluginButtonClicked()
 {
@@ -295,96 +351,118 @@ TObjectPtr<AUsdStageActor> FUSDCameraFrameRangesModule::GetUsdStageActor()
 		UE_LOG(LogTemp, Warning, TEXT("GEditor is not available"));
 		return nullptr;
 	}
-	
+    
 	UWorld* World = GEditor->GetEditorWorldContext().World();
 
-
-	// Find all USDStageActor actors in the world
 	TArray<AActor*> StageActors;
 	UGameplayStatics::GetAllActorsOfClass(World, AUsdStageActor::StaticClass(), StageActors);
 
-	// Will only work with one UsdStageActor, which is the aim for this project
-	TObjectPtr<AUsdStageActor> StageActor = Cast<AUsdStageActor>(StageActors[0]);	
+	if (StageActors.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No AUsdStageActor found in the world"));
+		return nullptr;
+	}
+	else if (StageActors.Num() > 1)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Multiple UsdStageActor's detected, using first one found"));
+		return nullptr;
+	}
+		
 
+	// Will only work with one UsdStageActor, which is the aim for this project
+	TObjectPtr<AUsdStageActor> StageActor = Cast<AUsdStageActor>(StageActors[0]);
 	if (!StageActor)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("USDStageActor pointer is null"));
 		return nullptr;
 	}
-	else
-	{
-		UE_LOG(LogTemp, Log, TEXT("USDStageActor assigned"));
-	}
-
+    
+	UE_LOG(LogTemp, Log, TEXT("USDStageActor assigned"));
 	return StageActor;
 }
+
 
 // TODO add protection against array length stuff
 TArray<FCameraInfo> FUSDCameraFrameRangesModule::GetCamerasFromUSDStage(TObjectPtr<AUsdStageActor> StageActor)
 {
-	TArray<UE::FSdfPath> CameraPaths;
-	TArray<FCameraInfo> Cameras;
-	
-	UE::FUsdStage StageBase = StageActor->GetUsdStage();	
-	UE::FUsdPrim root = StageBase.GetPseudoRoot();
+    TArray<FCameraInfo> Cameras;
 
-	TraverseAndCollectCameras(root, CameraPaths);
+    if (!StageActor)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("StageActor is null."));
+        return Cameras;
+    }
 
-	for (UE::FSdfPath path : CameraPaths)
-	{
-		UE::FUsdPrim CurrentPrim = StageBase.GetPrimAtPath(path);
-		FCameraInfo CameraInfo;
-		CameraInfo.CameraName = CurrentPrim.GetName().ToString();
-		
-		// UE::FUsdAttribute AttrRotate = CurrentPrim.GetAttribute(TEXT("xformOp:rotateXYZ"));
-		// UE::FUsdAttribute AttrTranslate = CurrentPrim.GetAttribute(TEXT("xformOp:translate"));
-		
-		CameraInfo.Translation = CurrentPrim.GetAttribute(TEXT("xformOp:translate"));
-		CameraInfo.Rotation = CurrentPrim.GetAttribute(TEXT("xformOp:rotateXYZ"));
+    UE::FUsdStage StageBase = StageActor->GetUsdStage();
+    UE::FUsdPrim root = StageBase.GetPseudoRoot();
 
-		// TArray<double> RotTimeSamples;
-		// AttrRotate.GetTimeSamples(RotTimeSamples);
-		//
-		// TArray<double> TransTimeSamples;
-		// AttrRotate.GetTimeSamples(TransTimeSamples);
+    TArray<UE::FSdfPath> CameraPaths;
+    TraverseAndCollectCameras(root, CameraPaths);
 
-		CameraInfo.Rotation.GetTimeSamples(CameraInfo.RotTimeSamples);
-		CameraInfo.Translation.GetTimeSamples(CameraInfo.TransTimeSamples);
-		
-		if (CameraInfo.RotTimeSamples.Num() > 1 || CameraInfo.TransTimeSamples.Num() > 1)
-		{
-			if (CameraInfo.RotTimeSamples.Num() > CameraInfo.TransTimeSamples.Num())
-			{
-				if (CameraInfo.RotTimeSamples[1] == 2.0)
-					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
-				else
-				{
-					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[1];
-				}
-				CameraInfo.EndFrame = CameraInfo.RotTimeSamples[CameraInfo.RotTimeSamples.Num()-1];
-			}
-			else
-			{
-				if (CameraInfo.RotTimeSamples[1] == 2.0)
-					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
-				else
-				{
-					CameraInfo.StartFrame = CameraInfo.RotTimeSamples[1];
-				}
-				CameraInfo.EndFrame = CameraInfo.TransTimeSamples[CameraInfo.TransTimeSamples.Num()-1];
-			}
-		}
-		else
-		{
-			CameraInfo.StartFrame = 1;
-			CameraInfo.EndFrame = 1;
-		}
-		
-		Cameras.Add(CameraInfo);
-	}
-	
-	return Cameras;
+    if (CameraPaths.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No cameras found in the USD Stage."));
+        return Cameras;
+    }
+
+    for (UE::FSdfPath path : CameraPaths)
+    {
+        UE::FUsdPrim CurrentPrim = StageBase.GetPrimAtPath(path);
+        if (!CurrentPrim)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to get Prim at path: %s"), *path.GetString());
+            continue;
+        }
+
+        FCameraInfo CameraInfo;
+        CameraInfo.CameraName = CurrentPrim.GetName().ToString();
+        
+        CameraInfo.Translation = CurrentPrim.GetAttribute(TEXT("xformOp:translate"));
+        CameraInfo.Rotation = CurrentPrim.GetAttribute(TEXT("xformOp:rotateXYZ"));
+
+        if (CameraInfo.Rotation && CameraInfo.Translation)
+        {
+            CameraInfo.Rotation.GetTimeSamples(CameraInfo.RotTimeSamples);
+            CameraInfo.Translation.GetTimeSamples(CameraInfo.TransTimeSamples);
+            
+            if (CameraInfo.RotTimeSamples.Num() > 1 || CameraInfo.TransTimeSamples.Num() > 1)
+            {
+                if (CameraInfo.RotTimeSamples.Num() > CameraInfo.TransTimeSamples.Num())
+                {
+                    if (CameraInfo.RotTimeSamples[1] == 2.0)
+                        CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
+                    else
+                        CameraInfo.StartFrame = CameraInfo.RotTimeSamples[1];
+
+                    CameraInfo.EndFrame = CameraInfo.RotTimeSamples.Last();
+                }
+                else
+                {
+                    if (CameraInfo.RotTimeSamples[1] == 2.0)
+                        CameraInfo.StartFrame = CameraInfo.RotTimeSamples[0];
+                    else
+                        CameraInfo.StartFrame = CameraInfo.RotTimeSamples[1];
+
+                    CameraInfo.EndFrame = CameraInfo.TransTimeSamples.Last();
+                }
+            }
+            else
+            {
+                CameraInfo.StartFrame = 1;
+                CameraInfo.EndFrame = 1;
+            }
+
+            Cameras.Add(CameraInfo);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to get necessary attributes for camera: %s"), *CameraInfo.CameraName);
+        }
+    }
+
+    return Cameras;
 }
+
 
 void FUSDCameraFrameRangesModule::TraverseAndCollectCameras(UE::FUsdPrim& CurrentPrim,
 	TArray<UE::FSdfPath>& OutCameraPaths)
@@ -401,6 +479,65 @@ void FUSDCameraFrameRangesModule::TraverseAndCollectCameras(UE::FUsdPrim& Curren
 	{
 		UE_LOG(LogTemp, Log, TEXT("Traversing from %s, type: %s"), *Child.GetName().ToString(), *Child.GetTypeName().ToString());
 		TraverseAndCollectCameras(Child, OutCameraPaths);
+	}
+}
+
+
+void FUSDCameraFrameRangesModule::TraverseAndCollectMaterials(TObjectPtr<AUsdStageActor> StageActor, UE::FUsdPrim& CurrentPrim, TArray<FMaterialInfo>& MaterialNames)
+{
+	UE::FUsdStage Stage = StageActor->GetUsdStage();
+	if (!CurrentPrim)
+	{
+		return;
+	}
+
+	
+	const TCHAR* RelationshipName = TEXT("material:binding");
+
+	
+	if (UE::FUsdRelationship MaterialBindingRel = CurrentPrim.GetRelationship(RelationshipName))
+	{
+		TArray<UE::FSdfPath> TargetPaths;
+		bool btargets = MaterialBindingRel.GetTargets(TargetPaths);
+		if (btargets)
+		{
+			if (TargetPaths.Num() > 0)
+			{
+				for (UE::FSdfPath Path : TargetPaths)
+				{
+					UE_LOG(LogTemp, Log, TEXT("Current prim: %s Target path: %s"), *CurrentPrim.GetName().ToString(), *Path.GetString());
+				}
+			}
+		}
+
+		// so far is listing the found relationships, which is all the shading groups. We need to then find the shader from this and get that name
+		
+		// FString primname = CurrentPrim.GetName().ToString();
+		// FString rel = FString(MaterialBindingRel.GetPrimPath().GetName().c_str());
+
+		// UE_LOG(LogTemp, Log, TEXT("Prim name: %s Relationship name: %s"), *primname, *rel);
+
+	}
+
+	// if (pxr::UsdShadeMaterial Material = pxr::UsdShadeMaterial::Get(Stage, CurrentPrim.GetPrimPath()))
+	// {
+	// 	// Collect the material information
+	// 	FMaterialInfo MaterialInfo;
+	// 	pxr::UsdPrim MatPrim = Material.GetPrim();
+	// 	MaterialInfo.ObjName = CurrentPrim.GetName().ToString();
+	// 	MaterialInfo.MatName = FString(MatPrim.GetPrimPath().GetName().c_str());
+	// 	MaterialInfo.PrimPath = CurrentPrim.GetPrimPath();
+	//
+	// 	UE_LOG(LogTemp, Log, TEXT("Material found, object name: %s material name: %s prim path: %s"), *MaterialInfo.ObjName, *MaterialInfo.MatName, *MaterialInfo.PrimPath.GetString() );
+	//
+	// 	MaterialNames.Add(MaterialInfo);
+	//
+	// }
+
+	for (pxr::UsdPrim ChildPrim : CurrentPrim.GetChildren())
+	{
+		UE::FUsdPrim UEChildPrim(ChildPrim);
+		TraverseAndCollectMaterials(StageActor, UEChildPrim, MaterialNames);
 	}
 }
 
