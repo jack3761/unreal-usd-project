@@ -29,6 +29,7 @@
 #include "pxr/usd/usdShade/material.h"
 #include "pxr/usd/usdShade/shader.h"
 #include "USDIncludesEnd.h"
+#include "Engine/ObjectLibrary.h"
 #include "Experimental/Async/AwaitableTask.h"
 
 
@@ -306,11 +307,94 @@ FReply FUSDCameraFrameRangesModule::OnMaterialSwapButtonClicked(TObjectPtr<AUsdS
 	UE::FUsdStage Stage = StageActor->GetUsdStage();
 	UE::FUsdPrim root = Stage.GetPseudoRoot();
 	TArray<FMaterialInfo> MaterialNames;
+
+	// TArray<UMaterialInstance*>* Materials = GetMaterialInstances();
+	TArray<UMaterial*>* FoundMaterials = GetAllMaterials();
 	
 	TraverseAndCollectMaterials(StageActor, root, MaterialNames);
+
+	if (MaterialNames.Num() >0 )
+	{
+		for (FMaterialInfo Mat : MaterialNames)
+		{
+			UE::FUsdPrim CurrentPrim = Stage.GetPrimAtPath(Mat.PrimPath);
+			USceneComponent* GeneratedComponent = StageActor->GetGeneratedComponent(Mat.PrimPath.GetString());
+			
+			if (GeneratedComponent)
+			{
+				UE_LOG(LogTemp, Log, TEXT("ObjName: %s Generated Component name: %s"), *Mat.ObjName, *GeneratedComponent->GetName());
+
+				// Find the Unreal Material with the same name as the USD material
+				FString MaterialName = Mat.MatName;
+				for (UMaterial* FoundMaterial : *FoundMaterials)
+				{
+					if (MaterialName.Equals(FoundMaterial->GetName()))
+					{
+						UMeshComponent* MeshComponent = Cast<UMeshComponent>(GeneratedComponent);
+
+						MeshComponent->SetMaterial(0, FoundMaterial);
+						UE_LOG(LogTemp, Log, TEXT("Assigned material: %s to component: %s"), *MaterialName, *MeshComponent->GetName());
+					}
+					else
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Material: %s not found in project"), *MaterialName);
+					}
+				}
+			}
+		}
+	}
 	return FReply::Handled();
 }
 
+// https://forums.unrealengine.com/t/plugin-get-all-materials-in-current-project/342793/10
+TArray<UMaterialInstance*>* FUSDCameraFrameRangesModule::GetMaterialInstances()
+{
+	TArray<UMaterialInstance*>* Materials = new TArray<UMaterialInstance*>();
+
+    UObjectLibrary *lib = UObjectLibrary::CreateLibrary(UObject::StaticClass(), false, true);
+	UE_LOG(LogTemp, Warning, TEXT("Searching for material instances in /Game/Materials..."));
+	lib->LoadAssetDataFromPath(TEXT("/Game/Materials"));
+	TArray<FAssetData> assetData;
+	lib->GetAssetDataList(assetData);
+	UE_LOG(LogTemp, Warning, TEXT("Found %d"), assetData.Num());
+
+	for (FAssetData asset : assetData) {
+		UMaterialInstance* mi = Cast<UMaterialInstance>(asset.GetAsset());
+		if (mi) {
+			UE_LOG(LogTemp, Warning, TEXT("Material instance %s"), *mi->GetName());
+			Materials->Add(mi);
+		}
+	}
+	return Materials;
+}
+
+TArray<UMaterial*>* FUSDCameraFrameRangesModule::GetAllMaterials()
+{
+	TArray<UMaterial*>* Assets = new TArray<UMaterial*>();
+
+	// Create a library to load all asset data, not filtered by a specific class
+	UObjectLibrary *lib = UObjectLibrary::CreateLibrary(UObject::StaticClass(), false, true);
+	UE_LOG(LogTemp, Warning, TEXT("Searching for assets in /Game/Materials..."));
+
+	// Load asset data from the specified path
+	lib->LoadAssetDataFromPath(TEXT("/Game/Materials"));
+
+	// Retrieve asset data list
+	TArray<FAssetData> assetData;
+	lib->GetAssetDataList(assetData);
+	UE_LOG(LogTemp, Warning, TEXT("Found %d assets"), assetData.Num());
+
+	// Iterate through all asset data and add to the Assets array
+	for (FAssetData asset : assetData) {
+		UMaterial* obj = Cast<UMaterial>(asset.GetAsset());
+		if (obj) {
+			UE_LOG(LogTemp, Warning, TEXT("Asset: %s, type: %s"), *obj->GetName(), *obj->GetClass()->GetName());
+			Assets->Add(obj);
+		}
+	}
+
+	return Assets;
+}
 
 
 
@@ -493,32 +577,43 @@ void FUSDCameraFrameRangesModule::TraverseAndCollectMaterials(TObjectPtr<AUsdSta
 
 	
 	const TCHAR* RelationshipName = TEXT("material:binding");
-
-	
 	if (UE::FUsdRelationship MaterialBindingRel = CurrentPrim.GetRelationship(RelationshipName))
 	{
 		TArray<UE::FSdfPath> TargetPaths;
-		bool btargets = MaterialBindingRel.GetTargets(TargetPaths);
-		if (btargets)
+		bool bTargets = MaterialBindingRel.GetTargets(TargetPaths);
+		if (bTargets)
 		{
-			if (TargetPaths.Num() > 0)
+			for (const UE::FSdfPath& Path : TargetPaths)
 			{
-				for (UE::FSdfPath Path : TargetPaths)
+				UE_LOG(LogTemp, Log, TEXT("Current prim: %s Target path: %s"), *CurrentPrim.GetName().ToString(), *Path.GetString());
+
+				if (UE::FUsdPrim MaterialPrim = Stage.GetPrimAtPath(Path))
 				{
-					UE_LOG(LogTemp, Log, TEXT("Current prim: %s Target path: %s"), *CurrentPrim.GetName().ToString(), *Path.GetString());
+					FString MaterialName = MaterialPrim.GetName().ToString();
+					UE_LOG(LogTemp, Log, TEXT("Material found: %s"), *MaterialName);
+
+					for (UE::FUsdPrim ChildPrim : MaterialPrim.GetChildren())
+					{
+						if (ChildPrim.IsA("Shader"))
+						{
+							FString ShaderName = ChildPrim.GetName().ToString();
+							UE_LOG(LogTemp, Log, TEXT("Shader found: %s"), *ShaderName);
+
+							FMaterialInfo MaterialInfo;
+							MaterialInfo.ObjName = CurrentPrim.GetName().ToString();
+							MaterialInfo.MatName = ShaderName;
+							MaterialInfo.PrimPath = CurrentPrim.GetPrimPath();
+
+							UE_LOG(LogTemp, Log, TEXT("Adding material info, ObjName: %s MatName: %s PrimPath: %s"), *MaterialInfo.ObjName,  *MaterialInfo.MatName, *MaterialInfo.PrimPath.GetString());
+
+							
+							MaterialNames.Add(MaterialInfo);
+						}
+					}
 				}
 			}
 		}
-
-		// so far is listing the found relationships, which is all the shading groups. We need to then find the shader from this and get that name
-		
-		// FString primname = CurrentPrim.GetName().ToString();
-		// FString rel = FString(MaterialBindingRel.GetPrimPath().GetName().c_str());
-
-		// UE_LOG(LogTemp, Log, TEXT("Prim name: %s Relationship name: %s"), *primname, *rel);
-
 	}
-
 	// if (pxr::UsdShadeMaterial Material = pxr::UsdShadeMaterial::Get(Stage, CurrentPrim.GetPrimPath()))
 	// {
 	// 	// Collect the material information

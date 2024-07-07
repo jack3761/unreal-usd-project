@@ -69,6 +69,8 @@ private:
 	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
 	FReply OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera);
 	FReply OnMaterialSwapButtonClicked(TObjectPtr<AUsdStageActor> StageActor);
+	TArray<UMaterialInstance*>* GetMaterialInstances();
+	TArray<UMaterial*>* GetAllMaterials();
 
 private:
 	TSharedPtr<class FUICommandList> PluginCommands;
