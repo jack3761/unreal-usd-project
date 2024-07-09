@@ -14,41 +14,52 @@
 #include "USDIncludesEnd.h"
 
 
-float UUSDAttributeFunctionLibrary::GetUsdFloatAttribute(AUsdStageActor* StageActor, FString PrimName, FString AttrName)
+template <typename T>
+T UUSDAttributeFunctionLibrary::GetUsdAttributeInternal(AUsdStageActor* StageActor, FString PrimName, FString AttrName)
 {
 	UE::FUsdStage StageBase = StageActor->GetUsdStage();
-	
+
 	UE::FSdfPath PrimPath;
 	UE::FUsdPrim root = StageBase.GetPseudoRoot();
-	
+
 	GetSdfPathWithName(root, PrimName, PrimPath);
-	
+
 	UE::FUsdPrim CurrentPrim = StageBase.GetPrimAtPath(PrimPath);
 	const TCHAR* AttrNameTChar = *AttrName;
-	
+
 	UE::FUsdAttribute Attr = CurrentPrim.GetAttribute(AttrNameTChar);
-	
+
 	UE::FVtValue Value;
-	
+
 	bool bSuccess = Attr.Get(Value);
-	
+
 	if (bSuccess)
 	{
 		pxr::VtValue& PxrValue = Value.GetUsdValue();
-		if (PxrValue.IsHolding<float>())
+		if (PxrValue.IsHolding<T>())
 		{
-			float AttrValue = PxrValue.Get<float>();
-			return AttrValue;
+			return PxrValue.Get<T>();
 		}
 	}
 
-	return 0.0;
+	return T();
 }
 
-FString UUSDAttributeFunctionLibrary::GetPointlessMessage()
+float UUSDAttributeFunctionLibrary::GetUsdFloatAttribute(AUsdStageActor* StageActor, FString PrimName, FString AttrName)
 {
-	return FString(TEXT("This is a pointless message"));
+	return GetUsdAttributeInternal<float>(StageActor, PrimName, AttrName);
 }
+
+int UUSDAttributeFunctionLibrary::GetUsdIntAttribute(AUsdStageActor* StageActor, FString PrimName, FString AttrName)
+{
+	return GetUsdAttributeInternal<int>(StageActor, PrimName, AttrName);
+}
+
+// double UUSDAttributeFunctionLibrary::GetUsdDoubleAttribute(AUsdStageActor* StageActor, FString PrimName, FString AttrName)
+// {
+// 	return GetUsdAttributeInternal<double>(StageActor, PrimName, AttrName);
+// }
+
 
 void UUSDAttributeFunctionLibrary::GetSdfPathWithName(UE::FUsdPrim& CurrentPrim, FString TargetName, UE::FSdfPath& OutPath)
 {
@@ -64,3 +75,7 @@ void UUSDAttributeFunctionLibrary::GetSdfPathWithName(UE::FUsdPrim& CurrentPrim,
 	}
 }
 
+// explicit instantiations to ensure proper linkage
+template float UUSDAttributeFunctionLibrary::GetUsdAttributeInternal<float>(AUsdStageActor* StageActor, FString PrimName, FString AttrName);
+template int UUSDAttributeFunctionLibrary::GetUsdAttributeInternal<int>(AUsdStageActor* StageActor, FString PrimName, FString AttrName);
+template double UUSDAttributeFunctionLibrary::GetUsdAttributeInternal<double>(AUsdStageActor* StageActor, FString PrimName, FString AttrName);
