@@ -67,10 +67,11 @@ private:
 	void TraverseAndCollectMaterials(TObjectPtr<AUsdStageActor> StageActor, UE::FUsdPrim& CurrentPrim, TArray<FMaterialInfo>& MaterialNames);
 
 	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
-	FReply OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera);
+	FReply OnDuplicateButtonClicked(TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera, FString LevelSequencePath);
 	FReply OnMaterialSwapButtonClicked(TObjectPtr<AUsdStageActor> StageActor);
-	TArray<UMaterialInstance*>* GetMaterialInstances();
 	TArray<UMaterial*>* GetAllMaterials();
+
+	void AddCameraToLevelSequence(FString LevelSequencePath, TObjectPtr<ACineCameraActor> CameraActor, TObjectPtr<AUsdStageActor> StageActor, FCameraInfo Camera);
 
 private:
 	TSharedPtr<class FUICommandList> PluginCommands;
